@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { TreeStore } from "../src/store/TreeStore";
-
-interface TreeItem {
-  id: string | number;
-  parent: string | number | null;
-  label: string;
-  [key: string]: any;
-}
+import { TreeStore, type TreeItem } from "../src/store/TreeStore";
 
 const testData: TreeItem[] = [
   { id: 1, parent: null, label: "Айтем 1" },
@@ -96,6 +89,17 @@ describe("TreeStore", () => {
       expect(parents2[1].id).toBe("91064cee");
       expect(parents2[2].id).toBe(1);
     });
+
+    it("should return single element for root item", () => {
+      const parents = store.getAllParents(1);
+      expect(parents).toHaveLength(1);
+      expect(parents[0].id).toBe(1);
+    });
+
+    it("should return empty array for non-existent id", () => {
+      const parents = store.getAllParents(999);
+      expect(parents).toHaveLength(0);
+    });
   });
 
   describe("addItem", () => {
@@ -113,7 +117,9 @@ describe("TreeStore", () => {
         parent: null,
         label: "Дубликат",
       };
-      expect(() => store.addItem(duplicateItem)).toThrow();
+      expect(() => store.addItem(duplicateItem)).toThrow(
+        "Item with id 1 already exists",
+      );
     });
   });
 
@@ -152,6 +158,96 @@ describe("TreeStore", () => {
 
       expect(foundInOld).toBe(false);
       expect(foundInNew).toBe(true);
+    });
+  });
+
+  describe("performance", () => {
+    it("should handle large datasets efficiently", () => {
+      const largeData: TreeItem[] = [];
+      for (let i = 1; i <= 10000; i++) {
+        largeData.push({
+          id: i,
+          parent: i > 1 ? i - 1 : null,
+          label: `Item ${i}`,
+        });
+      }
+
+      const start = performance.now();
+      const largeStore = new TreeStore(largeData);
+      const buildTime = performance.now() - start;
+
+      expect(buildTime).toBeLessThan(100);
+
+      const getStart = performance.now();
+      const children = largeStore.getAllChildren(1);
+      const getTime = performance.now() - getStart;
+
+      expect(children).toHaveLength(9999);
+      expect(getTime).toBeLessThan(50);
+    });
+  });
+
+  describe("TreeStore - edge cases", () => {
+    let store: TreeStore;
+
+    beforeEach(() => {
+      store = new TreeStore(testData);
+    });
+
+    it("should handle removeItem with non-existent id", () => {
+      expect(() => store.removeItem(999)).not.toThrow();
+      expect(store.getAll()).toHaveLength(8);
+    });
+
+    it("should handle updateItem with parent as null", () => {
+      const updatedItem = { ...testData[4], parent: null };
+      store.updateItem(updatedItem);
+
+      const item = store.getItem(5);
+      expect(item?.parent).toBeNull();
+    });
+
+    it("should handle addItem with parent that has existing children", () => {
+      const newItem = { id: 9, parent: 1, label: "Новый элемент" };
+      store.addItem(newItem);
+
+      expect(store.getChildren(1)).toHaveLength(3);
+    });
+
+    it("should handle getAllChildren with no children", () => {
+      const children = store.getAllChildren(999);
+      expect(children).toHaveLength(0);
+    });
+
+    it("should handle getAllParents caching", () => {
+      const firstCall = store.getAllParents(7);
+      const secondCall = store.getAllParents(7);
+
+      expect(firstCall).toEqual(secondCall);
+      expect(firstCall).toHaveLength(4);
+    });
+
+    it("should handle updateItem when parent changes to existing parent", () => {
+      const updatedItem = { ...testData[7], parent: 1 };
+      store.updateItem(updatedItem);
+
+      expect(store.getChildren(1)).toHaveLength(3);
+      expect(store.getChildren(4)).toHaveLength(1);
+    });
+
+    it("should handle updateItem when parent changes to null", () => {
+      const updatedItem = { ...testData[1], parent: null };
+      store.updateItem(updatedItem);
+
+      const rootItems = store.getAll().filter((item) => item.parent === null);
+      expect(rootItems).toHaveLength(2);
+    });
+
+    it("should handle removeItem with children and update cache", () => {
+      store.removeItem(1);
+
+      expect(store.getAll()).toHaveLength(0);
+      expect(store.getAllParents(1)).toHaveLength(0);
     });
   });
 });
