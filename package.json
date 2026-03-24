@@ -1,0 +1,35 @@
+{
+  "name": "mstroy-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "author": "vbbatrakova",
+  "description": "Test task for MStroy",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "ag-grid-community": "^31.3.2",
+    "ag-grid-enterprise": "^31.3.2",
+    "ag-grid-vue3": "^31.3.2",
+    "vue": "^3.4.27"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitest/coverage-v8": "^1.6.1",
+    "@vitest/ui": "^1.6.1",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.5.1",
+    "jsdom": "^24.0.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.11",
+    "vitest": "^1.6.0",
+    "vue-tsc": "^2.0.19"
+  }
+}
