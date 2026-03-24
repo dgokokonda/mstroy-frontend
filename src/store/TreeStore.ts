@@ -8,29 +8,32 @@ export interface TreeItem {
 export class TreeStore {
   private items: Map<string | number, TreeItem>;
   private childrenMap: Map<string | number, TreeItem[]>;
+  private parentsCache: Map<string | number, TreeItem[]>;
 
   constructor(items: TreeItem[]) {
-    this.items = new Map();
-    this.childrenMap = new Map();
+    this.items = new Map(); // O(1) доступ по id
+    this.childrenMap = new Map(); // O(1) получение детей
+    this.parentsCache = new Map(); // Кэш для getAllParents
     this.buildMaps(items);
   }
 
   private buildMaps(items: TreeItem[]): void {
-    items.forEach((item) => {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       this.items.set(item.id, { ...item });
-    });
+    }
 
-    // O(1) алгоритм
-    this.childrenMap.clear();
-    this.items.forEach((item) => {
+    for (const [_, item] of this.items) {
       const parentId = item.parent;
       if (parentId !== null && parentId !== undefined) {
-        if (!this.childrenMap.has(parentId)) {
-          this.childrenMap.set(parentId, []);
+        const children = this.childrenMap.get(parentId);
+        if (children) {
+          children.push(item);
+        } else {
+          this.childrenMap.set(parentId, [item]);
         }
-        this.childrenMap.get(parentId)!.push(item);
       }
-    });
+    }
   }
 
   getAll(): TreeItem[] {
@@ -47,30 +50,39 @@ export class TreeStore {
 
   getAllChildren(id: string | number): TreeItem[] {
     const result: TreeItem[] = [];
-    const queue = [...this.getChildren(id)];
+    const stack = this.childrenMap.get(id);
+    if (!stack) return result;
 
-    while (queue.length > 0) {
-      const item = queue.shift()!;
+    for (let i = 0; i < stack.length; i++) {
+      const item = stack[i];
       result.push(item);
-      queue.push(...this.getChildren(item.id));
+      const grandchildren = this.childrenMap.get(item.id);
+      if (grandchildren) {
+        stack.push(...grandchildren);
+      }
     }
 
     return result;
   }
 
   getAllParents(id: string | number): TreeItem[] {
+    if (this.parentsCache.has(id)) {
+      return [...this.parentsCache.get(id)!];
+    }
+
     const result: TreeItem[] = [];
     let currentId: string | number | null = id;
-    let currentItem = this.getItem(currentId);
+    let currentItem = this.items.get(currentId);
 
     while (currentItem) {
       result.push(currentItem);
       currentId = currentItem.parent;
       if (currentId === null || currentId === undefined) break;
-      currentItem = this.getItem(currentId);
+      currentItem = this.items.get(currentId);
     }
 
-    return result;
+    this.parentsCache.set(id, result);
+    return [...result];
   }
 
   addItem(item: TreeItem): void {
@@ -81,24 +93,28 @@ export class TreeStore {
     this.items.set(item.id, { ...item });
 
     if (item.parent !== null && item.parent !== undefined) {
-      if (!this.childrenMap.has(item.parent)) {
-        this.childrenMap.set(item.parent, []);
+      const children = this.childrenMap.get(item.parent);
+      if (children) {
+        children.push(this.items.get(item.id)!);
+      } else {
+        this.childrenMap.set(item.parent, [this.items.get(item.id)!]);
       }
-      this.childrenMap.get(item.parent)!.push(this.items.get(item.id)!);
     }
+
+    this.parentsCache.clear();
   }
 
   removeItem(id: string | number): void {
-    const item = this.getItem(id);
+    const item = this.items.get(id);
     if (!item) return;
 
     const childrenToRemove = this.getAllChildren(id);
-    childrenToRemove.forEach((child) => {
-      this.items.delete(child.id);
-    });
+    for (let i = 0; i < childrenToRemove.length; i++) {
+      this.items.delete(childrenToRemove[i].id);
+      this.childrenMap.delete(childrenToRemove[i].id);
+    }
 
     this.items.delete(id);
-
     this.childrenMap.delete(id);
 
     if (item.parent !== null && item.parent !== undefined) {
@@ -110,10 +126,12 @@ export class TreeStore {
         }
       }
     }
+
+    this.parentsCache.clear();
   }
 
   updateItem(updatedItem: TreeItem): void {
-    const existingItem = this.getItem(updatedItem.id);
+    const existingItem = this.items.get(updatedItem.id);
     if (!existingItem) {
       throw new Error(`Item with id ${updatedItem.id} not found`);
     }
@@ -137,11 +155,15 @@ export class TreeStore {
       }
 
       if (newParent !== null && newParent !== undefined) {
-        if (!this.childrenMap.has(newParent)) {
-          this.childrenMap.set(newParent, []);
+        const newParentChildren = this.childrenMap.get(newParent);
+        if (newParentChildren) {
+          newParentChildren.push(this.items.get(updatedItem.id)!);
+        } else {
+          this.childrenMap.set(newParent, [this.items.get(updatedItem.id)!]);
         }
-        this.childrenMap.get(newParent)!.push(this.items.get(updatedItem.id)!);
       }
+
+      this.parentsCache.clear();
     }
   }
 
